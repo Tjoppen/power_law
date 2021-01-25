@@ -1,7 +1,6 @@
 % asdf
 %function [x, iters] = goto_center (A, At, A2, b, x0)
-function [x, iters] = goto_center (A, At, b, x0)
-  printf("goto_center\n");
+function [x, iters] = goto_center (A, b, x0)
   x = x0;
   k = 1;
   iters = 0;
@@ -13,8 +12,8 @@ function [x, iters] = goto_center (A, At, b, x0)
       error("min(s) <= 0");
     endif
     s = 1./s;
-    g = At*s;
-    gnorm=norm(g)
+    g = (s'*A)';
+    gnorm = norm(g);
     s2 = s.^2;
     S = diag(s2);
     %SA = S*A;
@@ -24,17 +23,13 @@ function [x, iters] = goto_center (A, At, b, x0)
     p = zeros(1,size(A,2));
     for k = 1:bsz:size(A,2)
       l = min(k+bsz-1, size(A,2));
-      printf(".");
-      %printf("\b %8i:%8i   ", k, l);
-      fflush(stdout);
       p(k:l) = sum(S*A(:,k:l).^2,1);
     endfor
-    printf("\n");
     %P = diag(sum(S*A.^2,1));
     P = diag(p);
     %B = At*SA;
     %condPB = cond(inv(P)*B)
-    [h, flags, relres, iter] = pcg(@(x) At*(S*(A*x)), -g, 1e-6, length(b), P, [], zeros(size(x)));
+    [h, flags, relres, iter] = pcg(@(x) (((S*(A*x))')*A)', -g, 1e-6, length(b), P, [], zeros(size(x)));
     iters += iter;
 
     rr = 1;
@@ -45,7 +40,8 @@ function [x, iters] = goto_center (A, At, b, x0)
       xn = x + h*rr;
     endwhile
     x = xn;
-    ncur = norm(h*rr)/norm(x)
+    ncur = norm(h)/norm(x);
+    printf("gnorm=%g ncur=%g\n", gnorm, ncur);
     if ncur < 1e-6 || gnorm < 1e-10
       return
     endif

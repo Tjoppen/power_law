@@ -3,14 +3,11 @@ if !exist('A','var')
   % load data and reference solution
   printf("loading program.mat\n");
   load('program.mat');
-  printf("loading program.m\n");
-  program;
-  %clear Ai Aj Av;
   program_ref;
   printf("done loading\n");
 
-  A = At';
-  clear At;
+  A = A';
+  %clear At;
 
   % normalize c
   nc = norm(c);
@@ -22,13 +19,11 @@ if !exist('A','var')
 
   % normalize rows
   printf("norming\n");
-  d = norm(A, 2, 'rows');
-  %d = zeros(size(A,1),1);
-  %for k = 1:size(A,1)
-  %  d(k) = 1/norm(A(k,:));
-  %endfor
-  A = diag(d)*A;
-  b = diag(d)*b;
+  d = 1./norm(A, 2, 'rows');
+  D = diag(d);
+  A = D*A;
+  b = D*b;
+  clear d D;
   printf("normalized\n");
 
   % add constraints for xi >= 0
@@ -37,16 +32,16 @@ if !exist('A','var')
 
   % compute initial point by going from origin in the direction
   % of c as far as possible. let x0 be the halfway point
-  w = w_to_border(A, b, c, zeros(n,1));
+  w = w_to_border(A, b, c, zeros(size(A,1),1));
   x = w*c*0.5;
-  h = d;
-  At = A';
+  %h = d;
+  %At = A';
   %A2 = A.^2;
 
   % first get to the initial center
   printf("Computing initial center\n");
   %x = goto_center(A, At, A2, b, x);
-  x = goto_center(A, At, b, x);
+  x = goto_center(A, b, x);
 
   nsteps = round(2*129*sqrt(m));
   deltamin = 1/(13*sqrt(m));
@@ -58,6 +53,7 @@ if !exist('A','var')
   calm = 0;
   vroom = 0;
   d = x*0.5;
+  whos
 endif
 
 if exist('step','var')
@@ -68,7 +64,6 @@ else
   step0 = 1;
 endif
 
-whos
 t = time();
 tlast = 0;
 olast = nc*c'*x/ref;
@@ -77,7 +72,7 @@ oblast = olast;
 if true
   for step = step0:nsteps
     xbefore = x;
-    [x, iters] = goto_center(A, At, b, x);
+    [x, iters] = goto_center(A, b, x);
 
     %bnext = (1-delta)*b(1) - delta*c'*x;
     %db = bnext - b(1);
@@ -86,33 +81,36 @@ if true
     db2 = c'*x + b(1);
 
 
-    [xnew, iter] = goto_center(A, At, b, x);
+    [xnew, iter] = goto_center(A, b, x);
     iters += iter;
     h = xnew - x;
-
-    wc = w_to_border(A, b, c, xnew);
-    wh = w_to_border(A, b, h, xnew);
-    wm = w_to_border(A, b, c+h, xnew);
-
     a = c'*h/norm(c)/norm(h);
-    l = 0.5;
 
     % solver makes very little progress when cos(theta) approaches 90°
     % put this limit to 0 to make the cutoff at 90°
     amin = 0.05;
     if a > amin
-      xh = xnew + 0.5*wh*h;
-      xc = xnew + 0.5*wc*c;
-      xm = xnew + 0.5*wm*(c+h);
-      os = [c'*xh, c'*xc, c'*xm];
-      [w, iw] = max(os);
-      if iw == 1
-        x = xh;
-      elseif iw == 2
-        x = xc;
-      else
-        x = xm;
-      endif
+      bestl = 1;
+      bests = -Inf;
+      bestw = 0;
+      printf("Trying different directions ");
+      nh = h/norm(h);
+      Ax = A*xnew;
+      for l = exp(-0.005:0.00025:0.005)
+        printf(".");
+        fflush(stdout);
+        hc = l*nh + (1-l)*c;
+        w = w_to_border(A, b, hc, Ax);
+        s = w*(c'*hc);
+        if s > bests
+          bests = s;
+          bestl = l;
+          bestw = w;
+          besthc = hc;
+        endif
+      endfor
+      printf(" l=%f was best\n", bestl);
+      x = xnew + 0.5*bestw*besthc;
     else
       x = xnew;
     endif
@@ -122,7 +120,6 @@ if true
     tnow = time()-t;
     o = nc*c'*x/ref;
     ob = nc*c'*xbefore/ref;
-    %printf("%6i/%6i %.1fsec dt=%.1fsec %g %g %g %f %f %f\n", step, nsteps, tnow, tnow-tlast, nc*c'*x/ref, norm(h), delta, a, wc, wh);
     stats(step,:) = [o, norm(h), delta, iters, tnow-tlast];
     printf("%6i/%6i t=%f dt=%f o=%g (%+g%%) ob=%g (%+g%%) n=%g a=%g i=%i\n", step, nsteps, sum(stats(:,5)), tnow-tlast, o, 100*(o/olast-1), ob, 100*(ob/oblast-1), norm(x-xbefore)/norm(x), a, iters);
     tlast = tnow;
@@ -226,9 +223,15 @@ perfstats = [
   300000, 100000,  31326,   3623.8, 0.917009; % new solver stop @ step 26 (a=0.0321687)
   1000000,300000,  28425,   6536.8, 0.875182; % herrmann, new solver, stop @ 28 (a=0.0793525), ref guessed
   3000000,1000000, 28891,   2394.6, 0.734454; % laptop, stop @ 30 (a=0.103162), ref guessed
-  %7426/141312 1.68623e+13 på 6514.6 sec
-  %1891/141312 2629.9sec 1.60163e+13
-  % 5148.4sec
+%15/815868 t=20885.029821 dt=1712.381353 o=0.381574 (+8.1391%) ob=0.352855 (+6.42727%) n=0.150753 a=0.278966 i=392
+%16/815868 t=22865.568467 dt=1980.538646 o=0.414083 (+8.51981%) ob=0.381574 (+8.1391%) n=0.141528 a=0.293602 i=457
+%17/815868 t=25189.984377 dt=2324.415910 o=0.451483 (+9.03181%) ob=0.414083 (+8.51981%) n=0.135194 a=0.310758 i=542
+%18/815868 t=27899.674790 dt=2709.690413 o=0.493395 (+9.28336%) ob=0.451483 (+0%) n=0.127614 a=0.328527 i=634
+%19/815868 t=31756.931224 dt=3857.256434 o=0.536083 (+8.65178%) ob=0.493395 (+0%) n=0.112574 a=0.344733 i=760
+%25/815868 t=66737.991659 dt=7367.324870 o=0.730429 (-3.74017e-06%) ob=0.730429 (+4.73781%) n=0.00564382 a=0.0425988 i=1520
+%t =  38838.40404
+%totiters =  14109
+
 ];
 
 %plot(stats*diag([1,1e-2,1,1e-3]));

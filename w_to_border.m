@@ -1,7 +1,7 @@
 % asdf
-function w = w_to_border (A, b, c, x)
+function w = w_to_border (A, b, c, Ax)
   epsilon = 1e-6;
-  num = b - A*x;
+  num = b - Ax;
   den = A*c;
   %li = find(abs(den) > epsilon);
   l = num ./ den;

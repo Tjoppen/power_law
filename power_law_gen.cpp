@@ -16,18 +16,21 @@ int main(int argc, char **argv) {
   if (argc >= 5 && argv[4][0] == 'm') fmt = 1;
   if (argc >= 5 && argv[4][0] == 'M') fmt = 2;
   map<int, map<int,int> > A;
-  map<int,int> b, c;
+  vector<int32_t> b, c;
+  vector<double> bd, cd;
   long nnz = 0;
 
   for (int i = 0; i < n; i++) {
-    c[i] = i+1;
+    c.push_back(i+1);
+    cd.push_back(c[i]);
   }
 
   for (int i = 0; i < m; i++) {
     if (i < n) {
       A[i][i] = 1 + rand() / m;
     }
-    b[i] = 1 + rand();
+    b.push_back(1 + rand());
+    bd.push_back(b[i]);
 
     for (int j = 0; j < k; j++) {
       int f = i < n ? i : n;
@@ -56,7 +59,7 @@ int main(int argc, char **argv) {
       }
       printf(" <= %i;\n", b[i]);
     }
-  } else if (fmt == 1 || fmt == 2) {
+  } else if (fmt == 1) {
     printf("c = [");
     for (int i = 0; i < n; i++) {
       printf("%i;", c[i]);
@@ -67,61 +70,39 @@ int main(int argc, char **argv) {
       printf("%i;", b[i]);
     }
     printf("];\n");
-    /*printf("Ai = [");
-    for (int i = 0; i < m; i++) {
-      auto& row = A[i];
-      for (size_t j = 0; j < row.size(); j++) {
-        printf("%i;", i+1);
-      }
-    }
-    printf("];\n");
-    printf("Aj = [");
-    for (int i = 0; i < m; i++) {
-      auto& row = A[i];
-      for (auto it2 = row.begin(); it2 != row.end(); it2++) {
-        printf("%i;", it2->first+1);
-      }
-    }
-    printf("];\n");
-    printf("Av = [");
-    for (int i = 0; i < m; i++) {
-      auto& row = A[i];
-      for (auto it2 = row.begin(); it2 != row.end(); it2++) {
-        printf("%i;", it2->second);
-      }
-    }
-    printf("];\n");*/
     printf("m = %i;\n", m);
     printf("n = %i;\n", n);
-    //printf("A = sparse(Ai,Aj,Av,m,n);\n");
-    if (fmt == 1) {
-      printf("A = sparse(m,n);\n");
-      for (int i = 0; i < m; i++) {
-        auto& row = A[i];
-        if (i % 1000 == 999) {
-          printf("printf(\"loaded %i/%i rows so far\\n\");\n", i+1, m);
-        }
-        for (auto it2 = row.begin(); it2 != row.end(); it2++) {
-          //printf("%i;", it2->second);
-          printf("A(%i,%i)=%i;\n", i+1, it2->first+1, it2->second);
-        }
+    printf("A = sparse(m,n);\n");
+    for (int i = 0; i < m; i++) {
+      auto& row = A[i];
+      if (i % 1000 == 999) {
+        printf("printf(\"loaded %i/%i rows so far\\n\");\n", i+1, m);
+      }
+      for (auto it2 = row.begin(); it2 != row.end(); it2++) {
+        //printf("%i;", it2->second);
+        printf("A(%i,%i)=%i;\n", i+1, it2->first+1, it2->second);
       }
     }
-  }
-
-  if (fmt == 2) {
+  } else if (fmt == 2) {
     mat_t *matfp = Mat_CreateVer("program.mat", NULL, MAT_FT_MAT5);
 
     enum matio_compression comp = MAT_COMPRESSION_NONE; //or MAT_COMPRESSION_ZLIB
     size_t dims1[1] = {1};
-    //size_t dims[1] = {nblocks};
-    //size_t dims2[2] = {nblocks,123};
-    /*matvar_t *var = Mat_VarCreate("m", MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &m, MAT_F_DONT_COPY_DATA);
+    size_t dimsc[1] = {n};
+    size_t dimsb[1] = {m};
+
+    matvar_t *var = Mat_VarCreate("m", MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &m, MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
     Mat_VarFree(var);
     var = Mat_VarCreate("n", MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &n, MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
-    Mat_VarFree(var);*/
+    Mat_VarFree(var);
+    var = Mat_VarCreate("b", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsb, bd.data(), MAT_F_DONT_COPY_DATA);
+    Mat_VarWrite(matfp, var, comp);
+    Mat_VarFree(var);
+    var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsc, cd.data(), MAT_F_DONT_COPY_DATA);
+    Mat_VarWrite(matfp, var, comp);
+    Mat_VarFree(var);
 
     mat_sparse_t s;
     s.ndata = s.nir = s.nzmax = nnz;
@@ -150,7 +131,8 @@ int main(int argc, char **argv) {
 
     size_t dims2[2] = {n, m};
     // transposed because matlab is CSC
-    matvar_t *var = Mat_VarCreate("At", MAT_C_SPARSE, MAT_T_DOUBLE, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
+    // gets un-transposed in code
+    var = Mat_VarCreate("A", MAT_C_SPARSE, MAT_T_DOUBLE, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
     Mat_VarFree(var);
     Mat_Close(matfp);
