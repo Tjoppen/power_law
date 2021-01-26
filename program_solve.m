@@ -80,7 +80,7 @@ for step = step0:nsteps
 
   % solver makes very little progress when cos(theta) approaches 90°
   % put this limit to 0 to make the cutoff at 90°
-  amin = 0.05;
+  amin = 0.00;
   if a > amin
     bestl = 1;
     bests = -Inf;
@@ -103,11 +103,16 @@ for step = step0:nsteps
     endfor
     printf(" l=%f was best\n", bestl);
     x = xnew + 0.85*bestw*besthc;
+    % 0.85
+    % 11/815868 t=25096.568000 dt=5114.917809 o=0.733651 (-2.52871e-05%) ob=0.733651 (+15.494%) n=0.0345428 a=0.0128646 i=1360
+    % totiters =  6181
+    % tottime =  25096.56800
+    % ser ut att finnas gott om utrymme för lägre amin
+    b(1) = db2 - c'*x;
   else
     x = xnew;
+    b(1) = (1-delta)*b(1) - delta*c'*x;
   endif
-
-  b(1) = db2 - c'*x;
 
   dt = time()-t;
   o = nc*c'*x/ref;
@@ -117,7 +122,12 @@ for step = step0:nsteps
   olast = o;
   oblast = ob;
 
-  if a <= amin || o >= 0.95
+  [res, xx, oo] = check_solution(A(2:end,:), b(2:end), c, x);
+  if res
+  %if a <= amin
+    printf("Found optimal solution!\n");
+    x = xx;
+    stats(step,:) = [nc*oo/ref, norm(h), delta, iters, dt];
     nsteps = step;
     stats = stats(1:nsteps,:);
     break
@@ -152,15 +162,7 @@ perfstats = [
   300000, 100000,  31326,   3623.8, 0.917009; % new solver stop @ step 26 (a=0.0321687)
   1000000,300000,  28425,   6536.8, 0.875182; % herrmann, new solver, stop @ 28 (a=0.0793525), ref guessed
   3000000,1000000, 28891,   2394.6, 0.734454; % laptop, stop @ 30 (a=0.103162), ref guessed
-%15/815868 t=20885.029821 dt=1712.381353 o=0.381574 (+8.1391%) ob=0.352855 (+6.42727%) n=0.150753 a=0.278966 i=392
-%16/815868 t=22865.568467 dt=1980.538646 o=0.414083 (+8.51981%) ob=0.381574 (+8.1391%) n=0.141528 a=0.293602 i=457
-%17/815868 t=25189.984377 dt=2324.415910 o=0.451483 (+9.03181%) ob=0.414083 (+8.51981%) n=0.135194 a=0.310758 i=542
-%18/815868 t=27899.674790 dt=2709.690413 o=0.493395 (+9.28336%) ob=0.451483 (+0%) n=0.127614 a=0.328527 i=634
-%19/815868 t=31756.931224 dt=3857.256434 o=0.536083 (+8.65178%) ob=0.493395 (+0%) n=0.112574 a=0.344733 i=760
-%25/815868 t=66737.991659 dt=7367.324870 o=0.730429 (-3.74017e-06%) ob=0.730429 (+4.73781%) n=0.00564382 a=0.0425988 i=1520
-%t =  38838.40404
-%totiters =  14109
-
+  10000000,3000000,14109,  38838.4, 1; % herrmann, tror jag
 ];
 
 %plot(stats*diag([1,1e-2,1,1e-3]));
