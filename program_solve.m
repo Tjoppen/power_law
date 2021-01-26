@@ -6,16 +6,13 @@ if !exist('A','var')
   program_ref;
   printf("done loading\n");
 
-  A = A';
-  %clear At;
-
   % normalize c
   nc = norm(c);
   c = c / nc;
 
-  % augment A with c
-  A = [-c'; A];
-  b = [0; b];
+  % un-transpose, augment A with c, add constraints for xi >= 0
+  A = [-c'; A'; -speye(n)];
+  b = [0; b; zeros(n,1)];
 
   % normalize rows
   printf("norming\n");
@@ -25,10 +22,6 @@ if !exist('A','var')
   b = D*b;
   clear d D;
   printf("normalized\n");
-
-  % add constraints for xi >= 0
-  A = [A; -speye(n)];
-  b = [b; zeros(n,1)];
 
   % compute initial point by going from origin in the direction
   % of c as far as possible. let x0 be the halfway point
@@ -53,6 +46,7 @@ if !exist('A','var')
   calm = 0;
   vroom = 0;
   d = x*0.5;
+  clear step
   whos
 endif
 
@@ -64,139 +58,74 @@ else
   step0 = 1;
 endif
 
-t = time();
-tlast = 0;
 olast = nc*c'*x/ref;
 oblast = olast;
 
-if true
-  for step = step0:nsteps
-    xbefore = x;
-    [x, iters] = goto_center(A, b, x);
-
-    %bnext = (1-delta)*b(1) - delta*c'*x;
-    %db = bnext - b(1);
-    %b(1) = bnext;
-    b(1) = (1-delta)*b(1) - delta*c'*x;
-    db2 = c'*x + b(1);
-
-
-    [xnew, iter] = goto_center(A, b, x);
-    iters += iter;
-    h = xnew - x;
-    a = c'*h/norm(c)/norm(h);
-
-    % solver makes very little progress when cos(theta) approaches 90°
-    % put this limit to 0 to make the cutoff at 90°
-    amin = 0.05;
-    if a > amin
-      bestl = 1;
-      bests = -Inf;
-      bestw = 0;
-      printf("Trying different directions ");
-      nh = h/norm(h);
-      Ax = A*xnew;
-      for l = exp(-0.005:0.00025:0.005)
-        printf(".");
-        fflush(stdout);
-        hc = l*nh + (1-l)*c;
-        w = w_to_border(A, b, hc, Ax);
-        s = w*(c'*hc);
-        if s > bests
-          bests = s;
-          bestl = l;
-          bestw = w;
-          besthc = hc;
-        endif
-      endfor
-      printf(" l=%f was best\n", bestl);
-      x = xnew + 0.5*bestw*besthc;
-    else
-      x = xnew;
-    endif
-  
-    b(1) = db2 - c'*x;
-
-    tnow = time()-t;
-    o = nc*c'*x/ref;
-    ob = nc*c'*xbefore/ref;
-    stats(step,:) = [o, norm(h), delta, iters, tnow-tlast];
-    printf("%6i/%6i t=%f dt=%f o=%g (%+g%%) ob=%g (%+g%%) n=%g a=%g i=%i\n", step, nsteps, sum(stats(:,5)), tnow-tlast, o, 100*(o/olast-1), ob, 100*(ob/oblast-1), norm(x-xbefore)/norm(x), a, iters);
-    tlast = tnow;
-    olast = o;
-    oblast = ob;
-
-    if a <= amin
-      nsteps = step;
-      stats = stats(1:nsteps,:);
-      break
-    endif
-  endfor
-else
 for step = step0:nsteps
+  t = time();
   xbefore = x;
-  s = b - A*x;
-  if min(s) <= 0
-    min(s)
-    error("min(s) <= 0");
-  endif
+  [x, iters] = goto_center(A, b, x);
 
-  s = 1./s;
-  g = At*s;
-  S = diag(s)^2;
-  SA = S*A;
-
-  if mod(step,100) == 1
-    printf("Recalc P\n");
-    P = diag(sum(S*A2,1));
-    printf("done\n");
-  endif
-
-  if k == 1
-    x0 = d;
-  else
-    x0 = zeros(size(x));
-  end
-
-  [h, flags, relres, iters] = pcg(@(x) At*(SA*x), -g, 1e-3, 100, P, [], x0);
-
-  x += h;
-
-  dnext = x - xbefore;
-  a = d'*dnext/norm(d)/norm(dnext);
-  d = dnext;
-
-  if iters < 2
-    delta *= 1.02;
-  elseif iters < 5
-    delta *= 1.01;
-  elseif iters > 30
-    delta *= 0.8;
-  elseif iters > 20
-    delta *= 0.9;
-  elseif iters > 15
-    delta *= 0.99;
-  %elseif iters > 8
-  %  delta *= 0.99;
-  end
-  delta = max(min(delta, deltamax), deltamin);
-
-  tnow = time()-t;
-  stats(step,:) = [nc*c'*x/ref, norm(h), delta, iters, tnow-tlast];
-  printf("%6i/%6i %.1fsec dt=%.1fsec %g %g %g %i\n", step, nsteps, sum(stats(:,5)), tnow-tlast, nc*c'*x/ref, norm(h), delta, iters);
-  tlast = tnow;
+  %bnext = (1-delta)*b(1) - delta*c'*x;
+  %db = bnext - b(1);
+  %b(1) = bnext;
   b(1) = (1-delta)*b(1) - delta*c'*x;
+  db2 = c'*x + b(1);
 
-  if mod(step,100) == 0
-    %semilogy(stats(1:step,3))
-    %plot([10*stats(1:step,1),log10(stats(1:step,[2,3]))]);
-    %axis([1,step,-5,10*max(stats(1:step,1))])
-    %legend('10o','log_{10} |h|','log_{10} \delta');
+
+  [xnew, iter] = goto_center(A, b, x);
+  iters += iter;
+  h = xnew - x;
+  a = c'*h/norm(c)/norm(h);
+
+  % solver makes very little progress when cos(theta) approaches 90°
+  % put this limit to 0 to make the cutoff at 90°
+  amin = 0.05;
+  if a > amin
+    bestl = 1;
+    bests = -Inf;
+    bestw = 0;
+    printf("Trying different directions ");
+    nh = h/norm(h);
+    Ax = A*xnew;
+    for l = exp(-0.005:0.00025:0.005)
+      printf(".");
+      fflush(stdout);
+      hc = l*nh + (1-l)*c;
+      w = w_to_border(A, b, hc, Ax);
+      s = w*(c'*hc);
+      if s > bests
+        bests = s;
+        bestl = l;
+        bestw = w;
+        besthc = hc;
+      endif
+    endfor
+    printf(" l=%f was best\n", bestl);
+    x = xnew + 0.85*bestw*besthc;
+  else
+    x = xnew;
+  endif
+
+  b(1) = db2 - c'*x;
+
+  dt = time()-t;
+  o = nc*c'*x/ref;
+  ob = nc*c'*xbefore/ref;
+  stats(step,:) = [o, norm(h), delta, iters, dt];
+  printf("%6i/%6i t=%f dt=%f o=%g (%+g%%) ob=%g (%+g%%) n=%g a=%g i=%i\n", step, nsteps, sum(stats(:,5)), dt, o, 100*(o/olast-1), ob, 100*(ob/oblast-1), norm(x-xbefore)/norm(x), a, iters);
+  olast = o;
+  oblast = ob;
+
+  if a <= amin || o >= 0.95
+    nsteps = step;
+    stats = stats(1:nsteps,:);
+    break
   endif
 endfor
-endif
-t = time() - t
+
 totiters = sum(stats(:,4))
+tottime = sum(stats(:,5))
 
 % m       n       totiters  t       result
 perfstats = [

@@ -116,11 +116,8 @@ int main(int argc, char **argv) {
     int j = 0;
     for (int i = 0; i < m; i++) {
       auto& row = A[i];
-      //int k = j;
       s.jc[i] = j;
       for (auto it2 = row.begin(); it2 != row.end(); it2++) {
-        //printf("%i;", it2->second);
-        //printf("A(%i,%i)=%i;\n", i+1, it2->first+1, it2->second);
         s.ir[j] = it2->first;
         d[j] = it2->second;
         j++;
