@@ -96,7 +96,7 @@ function [x, iters] = goto_center (A, b, x0)
     endwhile
     x = xn;
     ncur = norm(h)/norm(x);
-    printf("iter=%5i gnorm=%g ncur=%g\n", iter, gnorm, ncur);
+    printf("iter=%5i gnorm=%g ncur=%g, cond≃%g\n", iter, gnorm, ncur, max(p)/min(p));
     if ncur < 1e-6 || gnorm < 1e-10
       return
     endif
