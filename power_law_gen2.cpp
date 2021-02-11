@@ -28,43 +28,6 @@ int main(int argc, char **argv) {
   uint32_t m = v+w+o;
   uint32_t N = v+o;
 
-  // A is indexed like A[col][row]
-  deque<map<int, float> > A(v+o, map<int, float>());
-  vector<float> b, c;
-
-  // fill in technical coefficients
-  fprintf(stderr, "tech\n");
-  for (uint32_t k = 0; k < v; k++) {
-    if (k % 10000 == 0) {
-      fprintf(stderr, "%i/%i\n", k/10000, v/10000);
-    }
-    for (uint32_t l = 0; l < q; l++) {
-      A[rand() % (k+1)][rand() % (k+1)] = -1 - (rand() % (SCALE/q));
-    }
-    A[k][k] = SCALE;
-  }
-  for (uint32_t k = 0; k < v+o; k++) {
-    c.push_back(k < v ? 0 : 1);
-  }
-  // fill in baskets
-  fprintf(stderr, "baskets\n");
-  for (uint32_t ww = 0; ww < w; ww++) {
-    for (uint32_t dd = 0; dd < d; dd++) {
-      A[rand() % (v+1)][v+ww] = 1 + (rand() % SCALE);
-    }
-  }
-  // fill in balance equations
-  fprintf(stderr, "balance\n");
-  for (uint32_t k = 0; k < o; k++) {
-    for (uint32_t i = 0; i < v; i++) {
-      A[i][v+w+k] = -1;
-    }
-    A[v+k][v+w+k] = 1;
-  }
-
-
-/*for ww=1:w; for dd=1:d; A(n+ww,1+floor(rand()*n)) = rand(); endfor; endfor;  A((n+w+1):(n+w+o),1:n) = -1; A((n+w+1):(n+w+o),(n+1):(n+o)) = speye(o);*/
-
   mat_t *matfp = Mat_CreateVer("program.mat", NULL, MAT_FT_MAT5);
   enum matio_compression comp = MAT_COMPRESSION_NONE; //or MAT_COMPRESSION_ZLIB
   matvar_t *var;
@@ -82,41 +45,86 @@ int main(int argc, char **argv) {
   /*var = Mat_VarCreate("b", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsb, bd.data(), MAT_F_DONT_COPY_DATA);
   Mat_VarWrite(matfp, var, comp);
   Mat_VarFree(var);*/
-  var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsc, c.data(), MAT_F_DONT_COPY_DATA);
-  Mat_VarWrite(matfp, var, comp);
-  Mat_VarFree(var);
 
-  // destructively convert A to Matlab format
-  // this should minimize memory consumption
-  vector<mat_int32_t> ir;
-  vector<mat_int32_t> jc;
-  vector<float> data;
 
-  mat_int32_t j = 0;
-  while (A.size() > 0) {
-    auto& col = A[0];
-    jc.push_back(j);
-    j += col.size();
-    for (auto it = col.begin(); it != col.end(); it++) {
-      ir.push_back(it->first);
-      data.push_back(it->second);
-    }
-    col.clear();
-    A.pop_front();
+  {
+    vector<float> c;
+    for (uint32_t k = 0; k < v+o; k++) {
+      c.push_back(k < v ? 0 : 1);
+    }  var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsc, c.data(), MAT_F_DONT_COPY_DATA);
+    Mat_VarWrite(matfp, var, comp);
+    Mat_VarFree(var);
   }
-  jc.push_back(j);
 
-  mat_sparse_t s;
-  s.ndata = s.nir = s.nzmax = j;
-  s.ir = ir.data();
-  s.jc = jc.data();
-  s.data = data.data();
-  s.njc = N+1;
+  {
+    // A is indexed like A[col][row]
+    deque<map<uint32_t, float> > A(v+o, map<uint32_t, float>());
 
-  size_t dims2[2] = {m, N};
-  var = Mat_VarCreate("A", MAT_C_SPARSE, MAT_T_SINGLE, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
-  Mat_VarWrite(matfp, var, comp);
-  Mat_VarFree(var);
+    // fill in technical coefficients
+    fprintf(stderr, "tech\n");
+    for (uint32_t k = 0; k < v; k++) {
+      if (k % 10000 == 0) {
+        fprintf(stderr, "%i/%i\n", k/10000, v/10000);
+      }
+      for (uint32_t l = 0; l < q; l++) {
+        A[rand() % (k+1)][rand() % (k+1)] = -1 - (rand() % (SCALE/q));
+      }
+      A[k][k] = SCALE;
+    }
+    // fill in baskets
+    fprintf(stderr, "baskets\n");
+    for (uint32_t ww = 0; ww < w; ww++) {
+      for (uint32_t dd = 0; dd < d; dd++) {
+        A[rand() % (v+1)][v+ww] = 1 + (rand() % SCALE);
+      }
+    }
+    // fill in balance equations
+    fprintf(stderr, "balance\n");
+    for (uint32_t k = 0; k < o; k++) {
+      for (uint32_t i = 0; i < v; i++) {
+        A[i][v+w+k] = -1;
+      }
+      A[v+k][v+w+k] = 1;
+    }
+
+    int nnz = 0;
+    for (const auto& colit : A) {
+      nnz += colit.size();
+    }
+    fprintf(stderr, "        %i\n", nnz*(sizeof(_Rb_tree_node_base)+sizeof(uint32_t)+sizeof(float))/1024);
+
+    // destructively convert A to Matlab format
+    // this should minimize memory consumption
+    vector<mat_int32_t> ir;
+    vector<mat_int32_t> jc;
+    vector<float> data;
+
+    mat_int32_t j = 0;
+    while (A.size() > 0) {
+      auto& col = A[0];
+      jc.push_back(j);
+      j += col.size();
+      for (auto it = col.begin(); it != col.end(); it++) {
+        ir.push_back(it->first);
+        data.push_back(it->second);
+      }
+      col.clear();
+      A.pop_front();
+    }
+    jc.push_back(j);
+
+    mat_sparse_t s;
+    s.ndata = s.nir = s.nzmax = j;
+    s.ir = ir.data();
+    s.jc = jc.data();
+    s.data = data.data();
+    s.njc = N+1;
+
+    size_t dims2[2] = {m, N};
+    var = Mat_VarCreate("A", MAT_C_SPARSE, MAT_T_SINGLE, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
+    Mat_VarWrite(matfp, var, comp);
+    Mat_VarFree(var);
+  }
 
   Mat_Close(matfp);
 
