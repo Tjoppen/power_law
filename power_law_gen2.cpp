@@ -14,6 +14,82 @@ using namespace std;
 
 #define SCALE 1000000
 
+typedef float real;
+#define MAT_REAL MAT_T_SINGLE
+
+static void swap(mat_int32_t *Ai, mat_int32_t *Aj, real *Ad, int a, int b) {
+  if (a != b) {
+    mat_int32_t x = Ai[a];
+    Ai[a] = Ai[b];
+    Ai[b] = x;
+
+    x = Aj[a];
+    Aj[a] = Aj[b];
+    Aj[b] = x;
+
+    real f = Ad[a];
+    Ad[a] = Ad[b];
+    Ad[b] = f;
+  }
+}
+
+static int compare(mat_int32_t ai, mat_int32_t aj, mat_int32_t bi, mat_int32_t bj) {
+  if (ai < bi) return -1;
+  if (ai > bi) return 1;
+  if (aj < bj) return -1;
+  if (aj > bj) return 1;
+  return 0;
+}
+
+static int part(mat_int32_t *Ai, mat_int32_t *Aj, real *Ad, int lo, int hi) {
+  int m = (lo+hi)/2;
+  mat_int32_t pi = Ai[m];
+  mat_int32_t pj = Aj[m];
+
+  int i = lo - 1;
+  int j = hi + 1;
+
+  for (;;) {
+    do {
+      i++;
+    } while (compare(Ai[i], Aj[i], pi, pj) < 0);
+    do {
+      j--;
+    } while (compare(Ai[j], Aj[j], pi, pj) > 0);
+    if (i >= j) {
+      return j;
+    }
+    swap(Ai, Aj, Ad, i, j);
+  }
+}
+
+static void qsort2(mat_int32_t *Ai, mat_int32_t *Aj, real *Ad, int lo, int hi, int level) {
+  if (level < 6) {
+    fprintf(stderr, ".");
+    fflush(stderr);
+  }
+  if (lo < hi) {
+    int p = part(Ai, Aj, Ad, lo, hi);
+    
+    qsort2(Ai, Aj, Ad, lo, p, level+1);
+    qsort2(Ai, Aj, Ad, p+1, hi, level+1);
+  }
+}
+
+static int deduplicate(mat_int32_t *Ai, mat_int32_t *Aj, real *Ad, int n) {
+  int j = 0;
+  for (int i = 1; i < n;) {
+    if (Ai[j] == Ai[i] && Aj[j] == Aj[i]) {
+      i++;
+    } else {
+      j++;
+      swap(Ai, Aj, Ad, i, j);
+      i++;
+    }
+  }
+  return j+1;
+}
+
 int main(int argc, char **argv) {
   if (argc < 6) {
     fprintf(stderr, "USAGE: %s n m b d o\n", argv[0]);
@@ -42,23 +118,31 @@ int main(int argc, char **argv) {
   var = Mat_VarCreate("n", MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &N, MAT_F_DONT_COPY_DATA);
   Mat_VarWrite(matfp, var, comp);
   Mat_VarFree(var);
-  /*var = Mat_VarCreate("b", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsb, bd.data(), MAT_F_DONT_COPY_DATA);
+  /*var = Mat_VarCreate("b", MAT_C_DOUBLE, MAT_REAL, 1, dimsb, bd.data(), MAT_F_DONT_COPY_DATA);
   Mat_VarWrite(matfp, var, comp);
   Mat_VarFree(var);*/
 
 
   {
-    vector<float> c;
+    vector<real> c;
     for (uint32_t k = 0; k < v+o; k++) {
       c.push_back(k < v ? 0 : 1);
-    }  var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_T_DOUBLE, 1, dimsc, c.data(), MAT_F_DONT_COPY_DATA);
+    }  var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_REAL, 1, dimsc, c.data(), MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
     Mat_VarFree(var);
   }
 
   {
-    // A is indexed like A[col][row]
-    deque<map<uint32_t, float> > A(v+o, map<uint32_t, float>());
+    int cap = v*(1+q) + w*d + o*(v+1);
+    vector<mat_int32_t> Ai;
+    vector<mat_int32_t> Aj;
+    vector<real> Ad;
+    Ai.reserve(cap);
+    Aj.reserve(cap);
+    Ad.reserve(cap);
+
+    //2221060
+    //2242120
 
     // fill in technical coefficients
     fprintf(stderr, "tech\n");
@@ -67,61 +151,105 @@ int main(int argc, char **argv) {
         fprintf(stderr, "%i/%i\n", k/10000, v/10000);
       }
       for (uint32_t l = 0; l < q; l++) {
-        A[rand() % (k+1)][rand() % (k+1)] = -1 - (rand() % (SCALE/q));
+        Ai.push_back(rand() % (k+1));
+        Aj.push_back(rand() % (k+1));
+        Ad.push_back(-1 - (real)(rand() % (SCALE/q)));
       }
-      A[k][k] = SCALE;
+      Ai.push_back(k);
+      Aj.push_back(k);
+      Ad.push_back(SCALE);
     }
     // fill in baskets
     fprintf(stderr, "baskets\n");
     for (uint32_t ww = 0; ww < w; ww++) {
+      if (ww % 10 == 0 && ww > 0) {
+        fprintf(stderr, "%3i/%3i\n", ww, w);
+      }
       for (uint32_t dd = 0; dd < d; dd++) {
-        A[rand() % (v+1)][v+ww] = 1 + (rand() % SCALE);
+        Ai.push_back(rand() % v);
+        Aj.push_back(v+ww);
+        Ad.push_back(1 + (real)(rand() % SCALE));
       }
     }
     // fill in balance equations
     fprintf(stderr, "balance\n");
     for (uint32_t k = 0; k < o; k++) {
+      if (k % 10 == 0 && k > 0) {
+        fprintf(stderr, "%3i/%3i\n", k, o);
+      }
       for (uint32_t i = 0; i < v; i++) {
-        A[i][v+w+k] = -1;
+        Ai.push_back(i);
+        Aj.push_back(v+w+k);
+        Ad.push_back(-1);
       }
-      A[v+k][v+w+k] = 1;
+      Ai.push_back(v+k);
+      Aj.push_back(v+w+k);
+      Ad.push_back(1);
     }
 
-    int nnz = 0;
-    for (const auto& colit : A) {
+    /*int nnz = 0;
+    for (const auto& colit : Ai) {
       nnz += colit.size();
-    }
-    fprintf(stderr, "        %i\n", nnz*(sizeof(_Rb_tree_node_base)+sizeof(uint32_t)+sizeof(float))/1024);
+    }*/
+    int nnz = Ai.size();
+    fprintf(stderr, "        %i\n", nnz*(2*sizeof(uint32_t)+sizeof(real))/1024);
 
-    // destructively convert A to Matlab format
-    // this should minimize memory consumption
-    vector<mat_int32_t> ir;
-    vector<mat_int32_t> jc;
-    vector<float> data;
 
-    mat_int32_t j = 0;
-    while (A.size() > 0) {
-      auto& col = A[0];
-      jc.push_back(j);
-      j += col.size();
-      for (auto it = col.begin(); it != col.end(); it++) {
-        ir.push_back(it->first);
-        data.push_back(it->second);
+    fprintf(stderr, "sorting\n");
+    qsort2(Ai.data(), Aj.data(), Ad.data(), 0, nnz-1, 0);
+
+    /*for (int x = 0; x < nnz; x++) {
+      fprintf(stderr, "%i %i\n", Ai[x], Aj[x]);
+    }*/
+
+    // verify sort
+    fprintf(stderr, "\nverify\n");
+    for (int x = 1; x < nnz; x++) {
+      if (compare(Ai[x-1], Aj[x-1], Ai[x], Aj[x]) > 0) {
+        fprintf(stderr, "bad @ %i: %i,%i %i,%i\n", x, Ai[x-1], Aj[x-1], Ai[x], Aj[x]);
+        return 1;
       }
-      col.clear();
-      A.pop_front();
     }
-    jc.push_back(j);
+
+    fprintf(stderr, "deduplicate\n");
+    int nnz2 = deduplicate(Ai.data(), Aj.data(), Ad.data(), nnz);
+    fprintf(stderr, "%i -> %i\n", nnz, nnz2);
+    nnz = nnz2;
+    /*for (int x = 0; x < nnz; x++) {
+      fprintf(stderr, "%i %i %f\n", Ai[x], Aj[x], Ad[x]);
+    }*/
+
+    fprintf(stderr, "verify2\n");
+    for (int x = 1; x < nnz; x++) {
+      if (compare(Ai[x-1], Aj[x-1], Ai[x], Aj[x]) >= 0) {
+        fprintf(stderr, "bad @ %i: %i,%i %i,%i\n", x, Ai[x-1], Aj[x-1], Ai[x], Aj[x]);
+        return 1;
+      }
+    }
+
+    vector<mat_int32_t> jc;
+    int ofs = 0;
+    for (int col = 0; col < N; col++) {
+      //fprintf(stderr, "%i @ %i\n", col, ofs);
+      jc.push_back(ofs);
+      while (Ai[ofs] == col && ofs < nnz) {
+        ofs++;
+      }
+    }
+    if (ofs != nnz) {
+      fprintf(stderr, "nnz mismatch %i %i\n", ofs, nnz);
+    }
+    jc.push_back(ofs);
 
     mat_sparse_t s;
-    s.ndata = s.nir = s.nzmax = j;
-    s.ir = ir.data();
+    s.ndata = s.nir = s.nzmax = nnz;
+    s.ir = Aj.data();
     s.jc = jc.data();
-    s.data = data.data();
+    s.data = Ad.data();
     s.njc = N+1;
 
     size_t dims2[2] = {m, N};
-    var = Mat_VarCreate("A", MAT_C_SPARSE, MAT_T_SINGLE, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
+    var = Mat_VarCreate("A", MAT_C_SPARSE, MAT_REAL, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
     Mat_VarFree(var);
   }
