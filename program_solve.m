@@ -1,53 +1,11 @@
-% LP solver ála Renegar
+% LP solver experiment
 if !exist('A','var')
-  % load data and reference solution
-  printf("loading program.mat\n");
-  load('program.mat');
-  program_ref;
-  printf("done loading\n");
-
-  % normalize c
-  nc = norm(c);
-  c = c / nc;
-
-  % un-transpose, augment A with c, add constraints for xi >= 0
-  A = [-c'; A'; -speye(n)];
-  b = [0; b; zeros(n,1)];
-
-  % normalize rows
-  printf("norming\n");
-  d = 1./norm(A, 2, 'rows');
-  D = diag(d);
-  A = D*A;
-  b = D*b;
-  clear d D;
-  printf("normalized\n");
-
-  % compute initial point by going from origin in the direction
-  % of c as far as possible. let x0 be the halfway point
-  w = w_to_border(A, b, c, zeros(size(A,1),1));
-  x = w*c*0.5;
-  %h = d;
-  %At = A';
-  %A2 = A.^2;
-
-  % first get to the initial center
-  printf("Computing initial center\n");
-  %x = goto_center(A, At, A2, b, x);
-  x = goto_center(A, b, x);
+  [A, b, c, nc, m, n, ref] = program_load('program.mat');
+  x = program_init(A, b, c);
 
   nsteps = round(2*129*sqrt(m));
-  deltamin = 1/(13*sqrt(m));
-  %deltamin = 0.03;
-  deltamax = 1/3;
-  %delta = 0.03;
-  delta = deltamin;
+  delta = 1/(13*sqrt(m));
   stats = zeros(nsteps,5);
-  calm = 0;
-  vroom = 0;
-  d = x*0.5;
-  clear step
-  whos
 endif
 
 if exist('step','var')
@@ -66,9 +24,6 @@ for step = step0:nsteps
   xbefore = x;
   [x, iters] = goto_center(A, b, x);
 
-  %bnext = (1-delta)*b(1) - delta*c'*x;
-  %db = bnext - b(1);
-  %b(1) = bnext;
   b(1) = (1-delta)*b(1) - delta*c'*x;
   db2 = c'*x + b(1);
 
@@ -102,29 +57,26 @@ for step = step0:nsteps
       endif
     endfor
     printf(" l=%f was best\n", bestl);
+    % go forward quite aggressively
     x = xnew + 0.85*bestw*besthc;
-    % 0.85
-    % 11/815868 t=25096.568000 dt=5114.917809 o=0.733651 (-2.52871e-05%) ob=0.733651 (+15.494%) n=0.0345428 a=0.0128646 i=1360
-    % totiters =  6181
-    % tottime =  25096.56800
-    % ser ut att finnas gott om utrymme för lägre amin
     b(1) = db2 - c'*x;
   else
     x = xnew;
     b(1) = (1-delta)*b(1) - delta*c'*x;
   endif
 
-  dt = time()-t;
+  dt = time() - t;
   o = nc*c'*x/ref;
   ob = nc*c'*xbefore/ref;
   stats(step,:) = [o, norm(h), delta, iters, dt];
+
   printf("%6i/%6i t=%f dt=%f o=%g (%+g%%) ob=%g (%+g%%) n=%g a=%g i=%i\n", step, nsteps, sum(stats(:,5)), dt, o, 100*(o/olast-1), ob, 100*(ob/oblast-1), norm(x-xbefore)/norm(x), a, iters);
+
   olast = o;
   oblast = ob;
-
   [res, xx, oo] = check_solution(A(2:end,:), b(2:end), c, x);
-  if res
-  %if a <= amin
+
+  if res % || a < min
     printf("Found optimal solution!\n");
     x = xx;
     stats(step,:) = [nc*oo/ref, norm(h), delta, iters, dt];
@@ -137,7 +89,7 @@ endfor
 totiters = sum(stats(:,4))
 tottime = sum(stats(:,5))
 
-% m       n       totiters  t       result
+% m       n       totiters     t    o/ref
 perfstats = [
   300,    100,    41045,      25.6, 0;
   1000,   300,    271126,    154.3, 0;
@@ -157,13 +109,11 @@ perfstats = [
   30000,  10000,  24438,      48.9, 0.977340; % new solver
   100000, 30000,  113705,  19286.4, 0.376237;
   100000, 30000,   47120,   1427.1, 0.974217; % new solver
-  300000, 100000, 737021, 117066.2, 0.676991; % 32.5 timmar
+  300000, 100000, 737021, 117066.2, 0.676991; % 32.5 hours
   300000, 100000,  20191,   2768.5, 0.902674; % new solver @ step 24 (a=0.256923)
-  300000, 100000,  31326,   3623.8, 0.917009; % new solver stop @ step 26 (a=0.0321687)
+  300000, 100000,  31326,   3623.8, 0.917009; % new solver @ step 26 (a=0.0321687)
   1000000,300000,  28425,   6536.8, 0.875182; % herrmann, new solver, stop @ 28 (a=0.0793525), ref guessed
   3000000,1000000, 28891,   2394.6, 0.734454; % laptop, stop @ 30 (a=0.103162), ref guessed
-  10000000,3000000,14109,  38838.4, 1; % herrmann, tror jag
+  10000000,3000000,14109,  38838.4, 0;
 ];
-
-%plot(stats*diag([1,1e-2,1,1e-3]));
 

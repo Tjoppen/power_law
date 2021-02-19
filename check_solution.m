@@ -1,4 +1,4 @@
-% asdf
+% Finds the closest extreme point to x and checks whether that is a valid solution
 function [res, xx, oo] = check_solution(A, b, c, x)
   % https://www.matem.unam.mx/~omar/math340/duality.html
   % https://sites.math.washington.edu/~burke/crs/407/notes/section4.pdf
@@ -12,8 +12,9 @@ function [res, xx, oo] = check_solution(A, b, c, x)
   % construct basis from constraints with smallest slack
   [ss, ssi] = sort(s);
   si = ssi(1:size(A,2));
+  k = sprank(A(si,:))
 
-  if sprank(A(si,:)) < size(A,2) - 1
+  if k != size(A,2)
     printf("bad rank\n");
     return
   endif
@@ -27,29 +28,26 @@ function [res, xx, oo] = check_solution(A, b, c, x)
     o
     oo
     min(s2)
-    printf("bad oo or s2\n");
+    printf("objective worse, or basis is not feasible\n");
     return
   endif
 
   % compute dual solution from basis
   y = c'/A(si,:);
 
-  % it suffices to check that y_B >= 0. y_N can be taken as zero
+  % it suffices to check that y_B >= 0, I think. y_N can be taken as zero
   if min(y) < -norm(y)*eps
     min(y)
-    printf("bad y\n");
+    printf("dual not feasible\n");
     return
   endif
 
-  % optionally we could check if the dual solution is close to the primal solution
-  % but we don't have enough accuracy to do that
-  % do a coarse check anyway
-  eps2 = 1e-6;
+  % optionally we could check if the dual solution is the same as the primal solution
+  eps2 = 1e-2; % being within 1% of optimal is good enough for us
   ooo = y*b(si);
-  if ooo < oo-oo*eps2 || ooo > oo+oo*eps2
-    oo
-    ooo
-    printf("bad ooo\n");
+  relo = (ooo - oo) / oo
+  if relo > eps2
+    printf("not quite there yet\n");
     return
   endif
 

@@ -2,6 +2,27 @@
 //d1 = sum(A!=0,1);
 //d2 = sum(A!=0,2);
 //scatter(d1(1:n),d2(1:n))
+
+//
+/*
+x = A\b;
+x /= min(A(1:(v+w),:)*x./b(1:(v+w),:));
+x *= 1.1;
+x((v+1):n,:) = -A((v+w+1):m,1:v)*x(1:v,:) * 1.1;
+
+if min(x) <= 0 || min(A*x - b) <= 0
+  error('bad x');
+endif
+
+l = [1./b(1:(v+w)); 0.9*ones(o,1)];
+
+if min(l) <= 0 || min(c'-l'*A) <= 0
+  error('bad l');
+endif
+
+l'*b
+c'*x
+*/
 #include <map>
 #include <set>
 #include <vector>
@@ -80,6 +101,9 @@ static int deduplicate(mat_int32_t *Ai, mat_int32_t *Aj, real *Ad, int n) {
   int j = 0;
   for (int i = 1; i < n;) {
     if (Ai[j] == Ai[i] && Aj[j] == Aj[i]) {
+      if (Ad[i] > Ad[j]) {
+        Ad[j] = Ad[i];
+      }
       i++;
     } else {
       j++;
@@ -92,7 +116,7 @@ static int deduplicate(mat_int32_t *Ai, mat_int32_t *Aj, real *Ad, int n) {
 
 int main(int argc, char **argv) {
   if (argc < 6) {
-    fprintf(stderr, "USAGE: %s n m b d o\n", argv[0]);
+    fprintf(stderr, "USAGE: %s num_variables inputs_per_industry num_baskets inputs_per_basket num_opt [Hawkins-Simon_constant]\n", argv[0]);
     return 1;
   }
   uint32_t v = atoi(argv[1]); // number of variables
@@ -101,33 +125,63 @@ int main(int argc, char **argv) {
   uint32_t d = atoi(argv[4]); // number of inputs to each basket
   uint32_t o = atoi(argv[5]); // number of balance equations we're optimizing over
 
+  // sometimes it is necessary to scale the coefficients down somewhat to satisfy the Hawkins-Simon condition
+  // or, at least scale them down enough that bicgstab(A(1:v,1:v), b(1:v)) gives a strictly positive x
+  int hk = SCALE/q;
+  if (argc >= 7) {
+    hk *= atof(argv[6]);
+  } else if (v > 10000) {
+    hk /= 2;  // determined impirically
+  }
+
   uint32_t m = v+w+o;
-  uint32_t N = v+o;
+  uint32_t n = v+o;
 
   mat_t *matfp = Mat_CreateVer("program.mat", NULL, MAT_FT_MAT5);
   enum matio_compression comp = MAT_COMPRESSION_NONE; //or MAT_COMPRESSION_ZLIB
   matvar_t *var;
 
   size_t dims1[1] = {1};
-  size_t dimsc[1] = {N};
+  size_t dimsc[1] = {n};
   size_t dimsb[1] = {m};
 
-  var = Mat_VarCreate("m", MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &m, MAT_F_DONT_COPY_DATA);
-  Mat_VarWrite(matfp, var, comp);
-  Mat_VarFree(var);
-  var = Mat_VarCreate("n", MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &N, MAT_F_DONT_COPY_DATA);
-  Mat_VarWrite(matfp, var, comp);
-  Mat_VarFree(var);
-  /*var = Mat_VarCreate("b", MAT_C_DOUBLE, MAT_REAL, 1, dimsb, bd.data(), MAT_F_DONT_COPY_DATA);
-  Mat_VarWrite(matfp, var, comp);
-  Mat_VarFree(var);*/
+#define WRITE_UINT32(name) do {\
+    var = Mat_VarCreate(#name, MAT_C_UINT32, MAT_T_UINT32, 1, dims1, &name, MAT_F_DONT_COPY_DATA); \
+    Mat_VarWrite(matfp, var, comp); \
+    Mat_VarFree(var); \
+  } while (0)
+  
+  WRITE_UINT32(m);
+  WRITE_UINT32(n);
+  WRITE_UINT32(v);
+  WRITE_UINT32(q);
+  WRITE_UINT32(w);
+  WRITE_UINT32(d);
+  WRITE_UINT32(o);
+
+  {
+    vector<real> b;
+    for (uint32_t k = 0; k < m; k++) {
+      if (k < v) {
+        b.push_back(SCALE);
+      } else if (k < v+w) {
+        b.push_back(SCALE);
+      } else {
+        b.push_back(0);
+      }
+    }
+    var = Mat_VarCreate("b", MAT_C_DOUBLE, MAT_REAL, 1, dimsb, b.data(), MAT_F_DONT_COPY_DATA);
+    Mat_VarWrite(matfp, var, comp);
+    Mat_VarFree(var);
+  }
 
 
   {
     vector<real> c;
     for (uint32_t k = 0; k < v+o; k++) {
       c.push_back(k < v ? 0 : 1);
-    }  var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_REAL, 1, dimsc, c.data(), MAT_F_DONT_COPY_DATA);
+    }
+    var = Mat_VarCreate("c", MAT_C_DOUBLE, MAT_REAL, 1, dimsc, c.data(), MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
     Mat_VarFree(var);
   }
@@ -150,14 +204,14 @@ int main(int argc, char **argv) {
       if (k % 10000 == 0) {
         fprintf(stderr, "%i/%i\n", k/10000, v/10000);
       }
-      for (uint32_t l = 0; l < q; l++) {
-        Ai.push_back(rand() % (k+1));
-        Aj.push_back(rand() % (k+1));
-        Ad.push_back(-1 - (real)(rand() % (SCALE/q)));
-      }
       Ai.push_back(k);
       Aj.push_back(k);
       Ad.push_back(SCALE);
+      for (uint32_t l = 0; l < q; l++) {
+        Ai.push_back(rand() % (k+1));
+        Aj.push_back(rand() % (k+1));
+        Ad.push_back(-1 - (real)(rand() % hk));
+      }
     }
     // fill in baskets
     fprintf(stderr, "baskets\n");
@@ -180,11 +234,11 @@ int main(int argc, char **argv) {
       for (uint32_t i = 0; i < v; i++) {
         Ai.push_back(i);
         Aj.push_back(v+w+k);
-        Ad.push_back(-1);
+        Ad.push_back(-SCALE);
       }
       Ai.push_back(v+k);
       Aj.push_back(v+w+k);
-      Ad.push_back(1);
+      Ad.push_back(SCALE);
     }
 
     /*int nnz = 0;
@@ -229,7 +283,7 @@ int main(int argc, char **argv) {
 
     vector<mat_int32_t> jc;
     int ofs = 0;
-    for (int col = 0; col < N; col++) {
+    for (int col = 0; col < n; col++) {
       //fprintf(stderr, "%i @ %i\n", col, ofs);
       jc.push_back(ofs);
       while (Ai[ofs] == col && ofs < nnz) {
@@ -246,9 +300,9 @@ int main(int argc, char **argv) {
     s.ir = Aj.data();
     s.jc = jc.data();
     s.data = Ad.data();
-    s.njc = N+1;
+    s.njc = n+1;
 
-    size_t dims2[2] = {m, N};
+    size_t dims2[2] = {m, n};
     var = Mat_VarCreate("A", MAT_C_SPARSE, MAT_REAL, 2, dims2, &s, MAT_F_DONT_COPY_DATA);
     Mat_VarWrite(matfp, var, comp);
     Mat_VarFree(var);
