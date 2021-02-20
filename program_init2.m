@@ -22,7 +22,11 @@ function [x, l] = program_init2(A, b, c, v, w, o)
   %l = [l./b(1:v);0.9e-6*ones(w+o,1)];
 
   if min(l) <= 0 || min(c'-l'*A) <= 0
-    error('bad l');
+    % HACKHACK
+    l((v+w+1):end) *= 1.1;
+    if min(l) <= 0 || min(c'-l'*A) <= 0
+      error('bad l');
+    endif
   endif
 
   l'*b
