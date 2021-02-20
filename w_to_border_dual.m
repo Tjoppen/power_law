@@ -1,7 +1,7 @@
 % asdf
-function w = w_to_border_dual (A, c, dl, l)
+function w = w_to_border_dual (A, c, dl, ll)
   epsilon = 1e-6;
-  num = c - (l'*A)';
+  num = c - (ll'*A)';
   den = -(dl'*A)';
   %li = find(abs(den) > epsilon);
   l = num ./ den;
@@ -15,4 +15,8 @@ function w = w_to_border_dual (A, c, dl, l)
   if w <= 0
     error("w <= 0");
   endif
+
+  l = -ll ./ dl;
+  l = find(l > epsilon);
+  w = min([w; l]);
 endfunction

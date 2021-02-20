@@ -15,4 +15,8 @@ function w = w_to_border_primal (A, b, dx, x)
   if w <= 0
     error("w <= 0");
   endif
+
+  l = -x ./ dx;
+  l = find(l > epsilon);
+  w = min([w; l]);
 endfunction
