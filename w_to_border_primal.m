@@ -1,9 +1,11 @@
 % asdf
-function w = w_to_border_primal (A, b, dx, x)
+function w = w_to_border_primal (A, b, dx, x, c, op)
   epsilon = 1e-6;
   num = A*x - b;
   den = A*dx;
   %li = find(abs(den) > epsilon);
+  num = [num; c'*x - op];
+  den = [den; c'*dx];
   l = num ./ den;
   %l = l(li);
   l = l(find(l > epsilon));
