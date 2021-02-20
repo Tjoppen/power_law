@@ -47,7 +47,7 @@ function [l, iters] = goto_center_dual(A, b, c, od, l0)
     p += b'.^2/d^2;
     P = diag(p);
 
-    [h, flags, relres, iter] = pcg(@(z) fun(z, l2, d, S), -g, 1e-6, length(c), P, [], -(P\g));
+    [h, flags, relres, iter] = pcg(@(z) fun(z, l2, d, S), -g, 1e-6, 100, P, [], -(P\g));
     iters += iter;
 
     if flags == 4

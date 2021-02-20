@@ -45,7 +45,7 @@ function [x, iters] = goto_center_primal(A, b, c, op, x0)
     p += c'.^2/d^2;
     P = diag(p);
 
-    [h, flags, relres, iter] = pcg(@(z) fun(z, x2, d, S), -g, 1e-6, length(b), P, [], -(P\g));
+    [h, flags, relres, iter] = pcg(@(z) fun(z, x2, d, S), -g, 1e-6, 100, P, [], -(P\g));
     iters += iter;
 
     if flags == 4
