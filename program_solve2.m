@@ -41,7 +41,7 @@ while step < 30
   %kappa = 0.3;
 
   if norm(dx)/norm(x) > eps
-    wp = w_to_border_primal(A, b, dx, x2);
+    wp = w_to_border_primal(A, b, dx, x2, c, op);
     x = x2 - wp*dx*k;
     s = A*x - b;
     op = c'*x + min([min(x), min(s)]) * 0.5;
@@ -53,7 +53,7 @@ while step < 30
   endif
 
   if norm(dl)/norm(l) > 1e-10
-    wd = w_to_border_dual  (A, c, dl, l2);
+    wd = w_to_border_dual  (A, c, dl, l2, b, od);
     l = l2 + wd*dl*k;
     s = c - (l'*A)';
     od = b'*l - min([min(l), min(s)]) * 0.5;
