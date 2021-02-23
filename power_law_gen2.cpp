@@ -35,6 +35,8 @@ using namespace std;
 
 #define SCALE 1000000
 
+#define PRICE 0 //Price model?
+
 typedef float real;
 #define MAT_REAL MAT_T_SINGLE
 
@@ -194,11 +196,10 @@ int main(int argc, char **argv) {
     Ai.reserve(cap);
     Aj.reserve(cap);
     Ad.reserve(cap);
+#if PRICE
     int ptot = 0;
     vector<int> p(v, 0);
-
-    //2221060
-    //2242120
+#endif
 
     // fill in technical coefficients
     fprintf(stderr, "tech\n");
@@ -209,6 +210,7 @@ int main(int argc, char **argv) {
       Ai.push_back(k);
       Aj.push_back(k);
       Ad.push_back(SCALE);
+#if PRICE
       set<int> seen;
       for (uint32_t l = 0; l < q && l < k; l++) {
         int q = rand() % ptot, j = 0;
@@ -229,6 +231,13 @@ int main(int argc, char **argv) {
       }
       p[k]++;
       ptot++;
+#else
+      for (uint32_t l = 0; l < q; l++) {
+        Ai.push_back(rand() % (k+1));
+        Aj.push_back(rand() % (k+1));
+        Ad.push_back(-1 - (real)(rand() % hk));
+      }
+#endif
     }
     // fill in baskets
     fprintf(stderr, "baskets\n");
@@ -297,6 +306,8 @@ int main(int argc, char **argv) {
         return 1;
       }
     }
+
+    printf("%i,%i\n", v, nnz);
 
     vector<mat_int32_t> jc;
     int ofs = 0;
