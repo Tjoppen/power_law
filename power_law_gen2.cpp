@@ -194,6 +194,8 @@ int main(int argc, char **argv) {
     Ai.reserve(cap);
     Aj.reserve(cap);
     Ad.reserve(cap);
+    int ptot = 0;
+    vector<int> p(v, 0);
 
     //2221060
     //2242120
@@ -207,11 +209,26 @@ int main(int argc, char **argv) {
       Ai.push_back(k);
       Aj.push_back(k);
       Ad.push_back(SCALE);
-      for (uint32_t l = 0; l < q; l++) {
-        Ai.push_back(rand() % (k+1));
-        Aj.push_back(rand() % (k+1));
-        Ad.push_back(-1 - (real)(rand() % hk));
+      set<int> seen;
+      for (uint32_t l = 0; l < q && l < k; l++) {
+        int q = rand() % ptot, j = 0;
+        for (; j < k-1; j++) {
+          if (q <= p[j]) {
+            break;
+          }
+          q -= p[j];
+        }
+        if (seen.find(j) == seen.end()) {
+          p[j]++;
+          ptot++;
+          seen.insert(j);
+          Ai.push_back(k);
+          Aj.push_back(j);
+          Ad.push_back(-1 - (real)(rand() % hk));
+        }
       }
+      p[k]++;
+      ptot++;
     }
     // fill in baskets
     fprintf(stderr, "baskets\n");

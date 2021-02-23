@@ -13,7 +13,7 @@ endif
 step = 1;
 oratio0 = Inf;
 
-while step < 30
+while true
   t = time();
   iters = 0;
   [x, iter] = goto_center_primal(A, b, c, op, x);
@@ -79,7 +79,7 @@ while step < 30
 endwhile
 sum(stats(:,3:4))
 f = fopen(sprintf('res%09i.csv', v), 'w');
-fprintf(f, '%i,%g,%i,%g,%g\n', v, sum(stats(:,3)), sum(stats(:,4)), b'*l, c'*x);
+fprintf(f, '%i,%g,%i,%g,%g,%i\n', v, sum(stats(:,3)), sum(stats(:,4)), b'*l, c'*x, nnz(A));
 fclose(f);
 
 % beter sig som O(v^1.16)
