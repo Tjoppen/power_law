@@ -1,4 +1,4 @@
-//v=300; q=10; w=30; d=30; o=30; A=sparse(v+w+o,v+o); for k=1:v; for l=1:q; A(1+floor(rand()*k),1+floor(rand()*k)) = -rand()/q; endfor; A(k,k)=1; endfor; for ww=1:w; for dd=1:d; A(v+ww,1+floor(rand()*v)) = rand(); endfor; endfor;  A((v+w+1):(v+w+o),1:v) = -1; A((v+w+1):(v+w+o),(v+1):(v+o)) = speye(o);
+//v=300; q=10; w=30; r=30; o=30; A=sparse(v+w+o,v+o); for k=1:v; for l=1:q; A(1+floor(rand()*k),1+floor(rand()*k)) = -rand()/q; endfor; A(k,k)=1; endfor; for ww=1:w; for rr=1:r; A(v+ww,1+floor(rand()*v)) = rand(); endfor; endfor;  A((v+w+1):(v+w+o),1:v) = -1; A((v+w+1):(v+w+o),(v+1):(v+o)) = speye(o);
 //d1 = sum(A!=0,1);
 //d2 = sum(A!=0,2);
 //scatter(d1(1:n),d2(1:n))
@@ -124,7 +124,7 @@ int main(int argc, char **argv) {
   uint32_t v = atoi(argv[1]); // number of variables
   uint32_t q = atoi(argv[2]); // how many inputs to each industry, on average
   uint32_t w = atoi(argv[3]); // number of baskets
-  uint32_t d = atoi(argv[4]); // number of inputs to each basket
+  uint32_t r = atoi(argv[4]); // number of inputs to each basket
   uint32_t o = atoi(argv[5]); // number of balance equations we're optimizing over
 
   // sometimes it is necessary to scale the coefficients down somewhat to satisfy the Hawkins-Simon condition
@@ -158,7 +158,7 @@ int main(int argc, char **argv) {
   WRITE_UINT32(v);
   WRITE_UINT32(q);
   WRITE_UINT32(w);
-  WRITE_UINT32(d);
+  WRITE_UINT32(r);
   WRITE_UINT32(o);
 
   {
@@ -189,7 +189,7 @@ int main(int argc, char **argv) {
   }
 
   {
-    int cap = v*(1+q) + w*d + o*(v+1);
+    int cap = v*(1+q) + w*r + o*(v+1);
     vector<mat_int32_t> Ai;
     vector<mat_int32_t> Aj;
     vector<real> Ad;
@@ -245,7 +245,7 @@ int main(int argc, char **argv) {
       if (ww % 10 == 0 && ww > 0) {
         fprintf(stderr, "%3i/%3i\n", ww, w);
       }
-      for (uint32_t dd = 0; dd < d; dd++) {
+      for (uint32_t rr = 0; rr < r; rr++) {
         Ai.push_back(rand() % v);
         Aj.push_back(v+ww);
         Ad.push_back(1 + (real)(rand() % SCALE));
