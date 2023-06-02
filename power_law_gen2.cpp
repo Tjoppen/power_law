@@ -1,3 +1,20 @@
+/*  power_law
+    Copyright (C) 2023  Tomas Härdin
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU Affero General Public License as
+    published by the Free Software Foundation, either version 3 of the
+    License, or (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU Affero General Public License for more details.
+
+    You should have received a copy of the GNU Affero General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+ */
+
 //v=300; q=10; w=30; r=30; o=30; A=sparse(v+w+o,v+o); for k=1:v; for l=1:q; A(1+floor(rand()*k),1+floor(rand()*k)) = -rand()/q; endfor; A(k,k)=1; endfor; for ww=1:w; for rr=1:r; A(v+ww,1+floor(rand()*v)) = rand(); endfor; endfor;  A((v+w+1):(v+w+o),1:v) = -1; A((v+w+1):(v+w+o),(v+1):(v+o)) = speye(o);
 //d1 = sum(A!=0,1);
 //d2 = sum(A!=0,2);
